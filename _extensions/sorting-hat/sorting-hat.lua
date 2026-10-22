@@ -37,18 +37,13 @@ local function extract_string_list(meta_value)
     -- Single string value
     table.insert(result, meta_value)
   elseif type(meta_value) == "table" then
-    -- Could be a MetaList or MetaInlines
-    -- First try to stringify the whole thing (for MetaInlines)
-    local str = extract_string(meta_value)
-    if str and str ~= "" and not str:match("^table:") then
-      table.insert(result, str)
-    else
-      -- It's a list, iterate through it
-      for _, item in ipairs(meta_value) do
-        local item_str = extract_string(item)
-        if item_str and item_str ~= "" and not item_str:match("^table:") then
-          table.insert(result, item_str)
-        end
+    -- A YAML list arrives as a MetaList, so read one language per item.
+    -- Anything else (MetaInlines, MetaString) is a single language.
+    local items = pandoc.utils.type(meta_value) == "List" and meta_value or {meta_value}
+    for _, item in ipairs(items) do
+      local item_str = extract_string(item)
+      if item_str and item_str ~= "" and not item_str:match("^table:") then
+        table.insert(result, item_str)
       end
     end
   end
