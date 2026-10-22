@@ -166,8 +166,8 @@ function Meta(meta)
   if meta.extensions and meta.extensions['sorting-hat'] then
     local config = meta.extensions['sorting-hat']
     
-    -- Get verbosity setting first (for debugging)
-    if config.DEBUG then
+    -- Get debug setting first
+    if config.debug then
       DEBUG = true
       quarto.log.output("=== Sorting Hat Extension Initialized ===")
     end
