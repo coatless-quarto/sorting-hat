@@ -48,7 +48,7 @@ All code blocks not written in Python will be removed from the document.
 | `action` | string | How to handle filtered code: `"remove"` or `"collapse"` | `"remove"` |
 | `placeholder` | string | Text to show when content is removed (use `{language}` for language name) | none |
 | `placeholder-style` | string | CSS styles for placeholder | default styling |
-| `verbose` | boolean | Enable debug logging | `false` |
+| `debug` | boolean | Enable debug logging | `false` |
 
 
 #### Notes
