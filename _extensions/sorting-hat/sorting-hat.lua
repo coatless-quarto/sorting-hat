@@ -102,7 +102,7 @@ end
 -- Create a placeholder div for removed content
 local function create_placeholder(language)
   if not PLACEHOLDER then
-    return pandoc.Null()
+    return {}
   end
   
   -- Replace {language} placeholder in text
@@ -249,7 +249,7 @@ function Div(div)
         local language = extract_cell_language(div)
         return create_placeholder(language)
       else
-        return pandoc.Null()
+        return {}
       end
     elseif override == "collapse" then
       if DEBUG then
@@ -287,7 +287,7 @@ function Div(div)
     elseif PLACEHOLDER then
       return create_placeholder(language)
     else
-      return pandoc.Null()
+      return {}
     end
   end
 end
@@ -368,7 +368,7 @@ function CodeBlock(block)
     elseif PLACEHOLDER then
       return create_placeholder(language)
     else
-      return pandoc.Null()
+      return {}
     end
   end
 end
