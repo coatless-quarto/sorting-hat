@@ -25,15 +25,4 @@ format:
 
 ## Bug fixes
 
-- `keep` and `remove` now accept a YAML list of languages, as documented.
-  Previously, `keep: [python, bash]` removed every code block and
-  `remove: [r, bash]` removed none.
-- `debug: true` now prints sorting-hat's log messages during a render.
-  Previously, it printed nothing.
-
-## Documentation
-
-- `debug` now appears under that name in the options table. Previously, the
-  table listed `verbose`, which sorting-hat never read.
-- The cell-level override example on the home page now shows the cells as you
-  would write them, instead of knitr's processed output.
+- `keep` and `remove` accept a list of languages, and `debug: true` shows sorting-hat's log.
