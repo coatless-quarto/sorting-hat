@@ -145,13 +145,13 @@ extensions:
     keep: python
 ---
 
-```{r}
+```{{r}}
 #| sorting-hat: keep
 # This R cell is kept despite global Python-only setting
 cat("Hello from R\n")
 ```
 
-```{python}
+```{{python}}
 #| sorting-hat: remove
 # This Python cell is removed despite being in keep list
 print("This won't appear")
