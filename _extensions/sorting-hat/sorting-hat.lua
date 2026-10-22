@@ -1,382 +1,269 @@
-local function is_empty(t)
-  if t == nil then return true end
-  if type(t) == "table" then
-    return next(t) == nil
-  end
-  return false
-end
+-- What a `sorting-hat:` cell option asks for
+---@alias Action "keep"|"remove"|"collapse"
 
-local function has_value(tab, val)
-  for _, value in ipairs(tab) do
-    if value == val then
-      return true
-    end
+---@class SortingHatConfig
+---@field keep pandoc.List Languages to keep; when non-empty, all others are filtered
+---@field remove pandoc.List Languages to filter when `keep` is empty
+---@field action string How to handle filtered code: "collapse", or "remove" (the default)
+---@field placeholder? string Text shown where code was removed; `{language}` is replaced
+---@field placeholder_style? string CSS for the placeholder div
+---@field debug boolean Log each decision
+
+---@type SortingHatConfig
+local config = {
+  keep = pandoc.List(),
+  remove = pandoc.List(),
+  action = "remove",
+  debug = false
+}
+
+local DEFAULT_PLACEHOLDER_STYLE = "color: #888; font-style: italic; padding: 0.5em; border-left: 3px solid #ddd; margin: 1em 0;"
+
+-- Print a message when `debug: true` is set
+---@param message string
+local function log(message)
+  if config.debug then
+    quarto.log.output(message)
   end
-  return false
 end
 
 -- Extract string from Pandoc Meta types
-local function extract_string(meta_value)
-  if type(meta_value) == "string" then
-    return meta_value
-  elseif type(meta_value) == "table" then
-    -- Try pandoc.utils.stringify
-    local success, result = pcall(pandoc.utils.stringify, meta_value)
-    if success and result then
-      return result
-    end
+---@param value any
+---@return string
+local function read_string(value)
+  if type(value) == "table" then
+    return pandoc.utils.stringify(value)
   end
-  return tostring(meta_value)
+  return tostring(value)
 end
 
--- Extract list of strings from Pandoc Meta types
-local function extract_string_list(meta_value)
-  local result = {}
-  
-  if type(meta_value) == "string" then
-    -- Single string value
-    table.insert(result, meta_value)
-  elseif type(meta_value) == "table" then
-    -- A YAML list arrives as a MetaList, so read one language per item.
-    -- Anything else (MetaInlines, MetaString) is a single language.
-    local items = pandoc.utils.type(meta_value) == "List" and meta_value or {meta_value}
-    for _, item in ipairs(items) do
-      local item_str = extract_string(item)
-      if item_str and item_str ~= "" and not item_str:match("^table:") then
-        table.insert(result, item_str)
-      end
-    end
+-- Extract list of languages from Pandoc Meta types
+---@param value any A single language or a YAML list of them
+---@return pandoc.List languages
+local function read_list(value)
+  -- A YAML boolean names no language
+  if type(value) == "boolean" then
+    return pandoc.List()
   end
-  
-  return result
+  -- A YAML list arrives as a MetaList, so read one language per item.
+  -- Anything else (MetaInlines, MetaString) is a single language.
+  local items = pandoc.utils.type(value) == "List" and value or {value}
+  return pandoc.List(items):map(read_string):filter(function(language)
+    return language ~= ""
+  end)
+end
+
+-- Read configuration from `extensions: sorting-hat:` metadata
+---@param meta pandoc.Meta
+local function read_config(meta)
+  local extensions = meta.extensions
+  if type(extensions) ~= "table" then
+    return
+  end
+  local options = extensions['sorting-hat']
+  if type(options) ~= "table" then
+    return
+  end
+
+  -- Get debug setting first
+  if options.debug then
+    config.debug = true
+    log("=== Sorting Hat Extension Initialized ===")
+  end
+
+  if options.keep then
+    config.keep = read_list(options.keep)
+    log("Keep languages: " .. table.concat(config.keep, ", "))
+  end
+
+  if options.remove then
+    config.remove = read_list(options.remove)
+    log("Remove languages: " .. table.concat(config.remove, ", "))
+  end
+
+  if options.action then
+    config.action = read_string(options.action)
+    log("Action: " .. config.action)
+  end
+
+  if options.placeholder then
+    local placeholder = read_string(options.placeholder)
+    config.placeholder = placeholder
+    log("Placeholder: " .. placeholder)
+  end
+
+  if options['placeholder-style'] then
+    local style = read_string(options['placeholder-style'])
+    config.placeholder_style = style
+    log("Placeholder style: " .. style)
+  end
 end
 
 -- Determine if a language should be kept based on configuration
+---@param language string
+---@return boolean
 local function should_keep_language(language)
-  -- If no language is specified, always keep
-  if not language then
-    return true
-  end
-  
   -- If keep list is specified, only keep blocks in that list
-  if KEEP_LANGUAGES and not is_empty(KEEP_LANGUAGES) then
-    local should_keep = has_value(KEEP_LANGUAGES, language)
-    if DEBUG then
-      quarto.log.output("Checking language '" .. language .. "' against keep list: " .. tostring(should_keep))
-    end
+  if #config.keep > 0 then
+    local should_keep = config.keep:includes(language)
+    log("Checking language '" .. language .. "' against keep list: " .. tostring(should_keep))
     return should_keep
   end
-  
+
   -- If remove list is specified, remove blocks in that list
-  if REMOVE_LANGUAGES and not is_empty(REMOVE_LANGUAGES) then
-    local should_remove = has_value(REMOVE_LANGUAGES, language)
-    local should_keep = not should_remove
-    if DEBUG then
-      quarto.log.output("Checking language '" .. language .. "' against remove list: " .. tostring(should_keep))
-    end
+  if #config.remove > 0 then
+    local should_keep = not config.remove:includes(language)
+    log("Checking language '" .. language .. "' against remove list: " .. tostring(should_keep))
     return should_keep
   end
-  
+
   -- If no configuration is set, keep all blocks
   return true
 end
 
--- Check for cell-level override in attributes
+-- Check for a `sorting-hat:` cell option
+---@param div pandoc.Div
+---@return Action|nil
 local function get_cell_override(div)
-  if not div.attributes then
-    return nil
+  local override = (div.attributes["sorting-hat"] or ""):lower()
+  if override == "keep" or override == "remove" or override == "collapse" then
+    return override
   end
-  
-  -- Check for sorting-hat attribute
-  local override = div.attributes["sorting-hat"]
-  if override then
-    override = override:lower()
-    if override == "keep" or override == "remove" or override == "collapse" then
-      return override
+  return nil
+end
+
+-- Extract language from the first code block in a cell
+---@param div pandoc.Div
+---@return string|nil
+local function cell_language(div)
+  for _, block in ipairs(div.content) do
+    if block.t == "CodeBlock" and #block.classes > 0 then
+      -- Language is typically the first class (before "cell-code")
+      local language = block.classes:find_if(function(class)
+        return class ~= "cell-code"
+      end)
+      log("Found CodeBlock with classes: " .. table.concat(block.classes, ", "))
+      log("Extracted language: " .. (language or "none"))
+      return language
     end
   end
-  
   return nil
 end
 
 -- Create a placeholder div for removed content
+---@param language? string
+---@return pandoc.Div|pandoc.Blocks
 local function create_placeholder(language)
-  if not PLACEHOLDER then
+  local template = config.placeholder
+  if not template then
     return {}
   end
-  
+
   -- Replace {language} placeholder in text
-  local text = PLACEHOLDER:gsub("{language}", language or "code")
-  
-  -- Create a div with the placeholder text
-  local placeholder_div = pandoc.Div(
+  local text = template:gsub("{language}", language or "code")
+
+  return pandoc.Div(
     {pandoc.Para({pandoc.Emph({pandoc.Str(text)})})},
-    pandoc.Attr("", {"sorting-hat-placeholder"}, {})
+    pandoc.Attr("", {"sorting-hat-placeholder"}, {
+      style = config.placeholder_style or DEFAULT_PLACEHOLDER_STYLE
+    })
   )
-  
-  -- Add custom style if specified
-  if PLACEHOLDER_STYLE then
-    placeholder_div.attributes["style"] = PLACEHOLDER_STYLE
-  else
-    -- Default style
-    placeholder_div.attributes["style"] = "color: #888; font-style: italic; padding: 0.5em; border-left: 3px solid #ddd; margin: 1em 0;"
-  end
-  
-  return placeholder_div
 end
 
--- Create a collapsed version of the cell
-local function create_collapsed_cell(div, language)
-  -- Create a details/summary structure for collapsing
+-- Wrap a cell or code block in an HTML details/summary element
+---@param el pandoc.Div|pandoc.CodeBlock
+---@param language? string
+---@return pandoc.Div
+local function create_collapsed(el, language)
   local summary_text = language and (language:upper() .. " code (click to expand)") or "Code (click to expand)"
-  
-  -- Wrap the cell content in a details element
-  local details = pandoc.Div(
-    div.content,
-    pandoc.Attr("", {"cell-collapsed"}, {})
-  )
-  
-  -- For HTML output, use HTML details/summary
-  -- For other formats, just add a note
-  local collapsed_content = {
-    pandoc.RawBlock("html", "<details><summary>" .. summary_text .. "</summary>"),
-    details,
-    pandoc.RawBlock("html", "</details>")
-  }
-  
-  local collapsed_div = pandoc.Div(
-    collapsed_content,
+
+  -- A cell's content moves into a plain div, without the cell's attributes
+  local inner = el
+  if el.t == "Div" then
+    inner = pandoc.Div(el.content, pandoc.Attr("", {"cell-collapsed"}, {}))
+  end
+
+  return pandoc.Div(
+    {
+      pandoc.RawBlock("html", "<details><summary>" .. summary_text .. "</summary>"),
+      inner,
+      pandoc.RawBlock("html", "</details>")
+    },
     pandoc.Attr("", {"sorting-hat-collapsed"}, {})
   )
-  
-  return collapsed_div
 end
 
--- Read configuration from metadata
-function Meta(meta)
-  -- Reset global variables
-  KEEP_LANGUAGES = nil
-  REMOVE_LANGUAGES = nil
-  DEBUG = false
-  ACTION = "remove"  -- Default action: "remove" or "collapse"
-  PLACEHOLDER = nil
-  PLACEHOLDER_STYLE = nil
-  
-  -- Store configuration in global variables
-  if meta.extensions and meta.extensions['sorting-hat'] then
-    local config = meta.extensions['sorting-hat']
-    
-    -- Get debug setting first
-    if config.debug then
-      DEBUG = true
-      quarto.log.output("=== Sorting Hat Extension Initialized ===")
-    end
-    
-    -- Get list of languages to keep (if specified)
-    if config.keep then
-      KEEP_LANGUAGES = extract_string_list(config.keep)
-      if DEBUG then
-        quarto.log.output("Keep languages: " .. table.concat(KEEP_LANGUAGES, ", "))
-      end
-    end
-    
-    -- Get list of languages to remove (if specified)
-    if config.remove then
-      REMOVE_LANGUAGES = extract_string_list(config.remove)
-      if DEBUG then
-        quarto.log.output("Remove languages: " .. table.concat(REMOVE_LANGUAGES, ", "))
-      end
-    end
-    
-    -- Get action (remove or collapse)
-    if config.action then
-      ACTION = extract_string(config.action)
-      if DEBUG then
-        quarto.log.output("Action: " .. ACTION)
-      end
-    end
-    
-    -- Get placeholder text (if specified)
-    if config.placeholder then
-      PLACEHOLDER = extract_string(config.placeholder)
-      if DEBUG then
-        quarto.log.output("Placeholder: " .. PLACEHOLDER)
-      end
-    end
-    
-    -- Get placeholder style (if specified)
-    if config['placeholder-style'] then
-      PLACEHOLDER_STYLE = extract_string(config['placeholder-style'])
-      if DEBUG then
-        quarto.log.output("Placeholder style: " .. PLACEHOLDER_STYLE)
-      end
-    end
+-- Keep a cell or code block, or collapse or remove it, based on its language
+---@param el pandoc.Div|pandoc.CodeBlock
+---@param language string
+---@return pandoc.Div|pandoc.Blocks|nil
+local function apply_action(el, language)
+  local kind = el.t == "Div" and "cell" or "CodeBlock"
+  if should_keep_language(language) then
+    log("Decision: KEEP " .. kind .. " (" .. language .. ")")
+    return nil
   end
-  
-  return meta
+
+  log("Decision: Filter " .. kind .. " (" .. language .. ") - action: " .. config.action)
+  if config.action == "collapse" then
+    return create_collapsed(el, language)
+  end
+  return create_placeholder(language)
 end
 
 -- Filter Div elements (for Quarto cells which wrap code blocks and outputs)
-function Div(div)
-  -- Only process divs with class "cell"
-  if not has_value(div.classes, "cell") then
-    return div
+---@param div pandoc.Div
+---@return pandoc.Div|pandoc.Blocks|nil
+local function filter_cell(div)
+  if not div.classes:includes("cell") then
+    return nil
   end
-  
-  if DEBUG then
-    quarto.log.output("\n--- Processing Cell Div ---")
-    quarto.log.output("Cell classes: " .. table.concat(div.classes, ", "))
-  end
-  
+
+  log("\n--- Processing Cell Div ---")
+  log("Cell classes: " .. table.concat(div.classes, ", "))
+
   -- Check for cell-level override first
   local override = get_cell_override(div)
   if override then
-    if DEBUG then
-      quarto.log.output("Cell-level override found: " .. override)
-    end
-    
+    log("Cell-level override found: " .. override)
+    log("Decision: " .. override:upper() .. " cell (override)")
     if override == "keep" then
-      if DEBUG then
-        quarto.log.output("Decision: KEEP cell (override)")
-      end
-      return div
-    elseif override == "remove" then
-      if DEBUG then
-        quarto.log.output("Decision: REMOVE cell (override)")
-      end
-      -- Check if we should show a placeholder
-      if PLACEHOLDER then
-        local language = extract_cell_language(div)
-        return create_placeholder(language)
-      else
-        return {}
-      end
+      return nil
     elseif override == "collapse" then
-      if DEBUG then
-        quarto.log.output("Decision: COLLAPSE cell (override)")
-      end
-      local language = extract_cell_language(div)
-      return create_collapsed_cell(div, language)
+      return create_collapsed(div, cell_language(div))
+    elseif not config.placeholder then
+      return {}
     end
+    return create_placeholder(cell_language(div))
   end
-  
-  -- Try to find language from code block inside the cell
-  local language = extract_cell_language(div)
-  
+
+  local language = cell_language(div)
   if not language then
-    if DEBUG then
-      quarto.log.output("No language detected, keeping cell")
-    end
-    return div
+    log("No language detected, keeping cell")
+    return nil
   end
-  
-  -- Decide whether to keep the entire cell based on language
-  if should_keep_language(language) then
-    if DEBUG then
-      quarto.log.output("Decision: KEEP cell (" .. language .. ")")
-    end
-    return div
-  else
-    -- Language should be filtered
-    if DEBUG then
-      quarto.log.output("Decision: Filter cell (" .. language .. ") - action: " .. ACTION)
-    end
-    
-    if ACTION == "collapse" then
-      return create_collapsed_cell(div, language)
-    elseif PLACEHOLDER then
-      return create_placeholder(language)
-    else
-      return {}
-    end
-  end
+
+  return apply_action(div, language)
 end
 
--- Extract language from a cell
-function extract_cell_language(div)
-  local language = nil
-  
-  if div.content then
-    for _, block in ipairs(div.content) do
-      -- Check for CodeBlock directly in cell
-      if block.t == "CodeBlock" then
-        if block.classes and #block.classes > 0 then
-          -- Language is typically the first class (before "cell-code")
-          for _, class in ipairs(block.classes) do
-            if class ~= "cell-code" then
-              language = class
-              break
-            end
-          end
-          if DEBUG then
-            quarto.log.output("Found CodeBlock with classes: " .. table.concat(block.classes, ", "))
-            quarto.log.output("Extracted language: " .. (language or "none"))
-          end
-          break
-        end
-      end
-    end
+-- Filter standalone code blocks (cells are handled by filter_cell)
+---@param block pandoc.CodeBlock
+---@return pandoc.Div|pandoc.Blocks|nil
+local function filter_code_block(block)
+  local language = block.classes[1]
+  if not language or block.classes:includes("cell-code") then
+    return nil
   end
-  
-  return language
+
+  log("\n--- Processing CodeBlock ---")
+  log("Classes: " .. table.concat(block.classes, ", "))
+  log("Language: " .. language)
+
+  return apply_action(block, language)
 end
 
--- Filter standalone code blocks (for non-cell code blocks)
-function CodeBlock(block)
-  -- Skip if this is inside a cell (has cell-code class)
-  if block.classes and has_value(block.classes, "cell-code") then
-    return block
-  end
-  
-  -- Get the language from the code block's classes
-  local language = nil
-  if block.classes and #block.classes > 0 then
-    language = block.classes[1]
-  end
-  
-  if DEBUG then
-    if language then
-      quarto.log.output("\n--- Processing CodeBlock ---")
-      quarto.log.output("Classes: " .. table.concat(block.classes, ", "))
-      quarto.log.output("Language: " .. language)
-    end
-  end
-  
-  -- Decide whether to keep or remove
-  if should_keep_language(language) then
-    if DEBUG and language then
-      quarto.log.output("Decision: KEEP CodeBlock (" .. language .. ")")
-    end
-    return block
-  else
-    -- Language should be filtered
-    if DEBUG and language then
-      quarto.log.output("Decision: Filter CodeBlock (" .. language .. ") - action: " .. ACTION)
-    end
-    
-    if ACTION == "collapse" then
-      -- Wrap in a collapsed structure
-      local summary_text = language and (language:upper() .. " code (click to expand)") or "Code (click to expand)"
-      return pandoc.Div(
-        {
-          pandoc.RawBlock("html", "<details><summary>" .. summary_text .. "</summary>"),
-          block,
-          pandoc.RawBlock("html", "</details>")
-        },
-        pandoc.Attr("", {"sorting-hat-collapsed"}, {})
-      )
-    elseif PLACEHOLDER then
-      return create_placeholder(language)
-    else
-      return {}
-    end
-  end
-end
-
--- Return the filter functions in correct order
--- Meta must be processed first to set up globals
--- Then Div and CodeBlock can use those globals
+-- Meta must be processed first so that the cells see the configuration
 return {
-  {Meta = Meta},
-  {Div = Div, CodeBlock = CodeBlock}
+  {Meta = read_config},
+  {Div = filter_cell, CodeBlock = filter_code_block}
 }
