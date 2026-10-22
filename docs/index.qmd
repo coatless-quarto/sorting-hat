@@ -63,9 +63,9 @@ Add to individual code cells to override global settings:
 
 | Attribute | Description |
 |-----------|-------------|
-| `#\| sorting-hat: keep` | Always keep this cell |
-| `#\| sorting-hat: remove` | Always remove this cell |
-| `#\| sorting-hat: collapse` | Always collapse this cell |
+| `#| sorting-hat: keep` | Always keep this cell |
+| `#| sorting-hat: remove` | Always remove this cell |
+| `#| sorting-hat: collapse` | Always collapse this cell |
 
 ## Examples of Configuration
 
