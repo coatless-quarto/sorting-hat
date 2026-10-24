@@ -1,0 +1,249 @@
+---
+title: "Frequently Asked Questions"
+date: "11-02-2025"
+date-modified: last-modified
+engine: markdown
+format:
+  html:
+    toc: true
+---
+
+# Getting Started
+
+## How do I install sorting-hat?
+
+Run this command in your Quarto project's directory:
+
+```bash
+quarto add coatless-quarto/sorting-hat
+```
+
+This installs the extension into `_extensions/coatless-quarto/sorting-hat/`. If you use version control, check in the `_extensions` directory.
+
+## What version of Quarto do I need?
+
+Quarto 1.10 or later. Check your version with:
+
+```bash
+quarto --version
+```
+
+sorting-hat is a Lua filter, so it doesn't need anything else.
+
+## How do I turn it on?
+
+Add the filter and your options to the document's front matter:
+
+```yaml
+---
+title: "My Document"
+filters:
+  - sorting-hat
+extensions:
+  sorting-hat:
+    keep: python
+---
+```
+
+Without `keep` or `remove`, sorting-hat leaves every code block in place.
+
+# Choosing Languages
+
+## Should I use `keep` or `remove`?
+
+Use `keep` to list the languages to show; everything else is filtered. Use `remove` to list the languages to filter; everything else stays. Both take one language or a list:
+
+```yaml
+extensions:
+  sorting-hat:
+    keep: [python, bash]
+```
+
+If you set both, `keep` wins and `remove` is ignored.
+
+## What name do I use for a language?
+
+The name from the code block, exactly as written: `python` for `{python}` cells and `r` for `{r}` cells. Names are case-sensitive, so `keep: Python` doesn't match `{python}` cells, and `bash` and `sh` count as different languages.
+
+## Which code blocks does it look at?
+
+Both executed cells, such as `{python}`, and plain code blocks that name a language, such as a ```` ```bash ```` block. Code blocks without a language are always kept, and inline code is never changed.
+
+## What happens to a cell's output?
+
+When sorting-hat filters a cell, the code and its output go together. To hide a cell's code but keep its output, use Quarto's `echo: false` instead.
+
+A cell with `echo: false` shows no code, so sorting-hat can't tell its language and always keeps its output. To filter one of those cells, give it a [cell override](#can-i-make-an-exception-for-one-cell) with `#| sorting-hat: remove`.
+
+# Cell Overrides
+
+## Can I make an exception for one cell?
+
+Yes. Add the `sorting-hat` cell option to that cell:
+
+````markdown
+```{{r}}
+#| sorting-hat: keep
+cat("This R cell stays, even with keep: python\n")
+```
+````
+
+It takes one of three values:
+
+| Cell option | Effect |
+|-------------|--------|
+| `#| sorting-hat: keep` | Always keep this cell |
+| `#| sorting-hat: remove` | Always remove this cell |
+| `#| sorting-hat: collapse` | Always collapse this cell |
+
+An override wins over `keep` and `remove`, and works even when you set neither. It can go anywhere among the cell's other options, and its value isn't case-sensitive.
+
+## Why isn't my override working?
+
+Check that:
+
+- The cell is an executed cell, such as ```` ```{python} ````. Overrides are cell options, so a plain ```` ```python ```` block ignores them.
+- The value is `keep`, `remove`, or `collapse`. sorting-hat ignores any other value and filters the cell by its language as usual.
+
+# Placeholders and Collapsing
+
+## Can I show a note where code was removed?
+
+Yes, with `placeholder`. `{language}` becomes the removed block's language:
+
+```yaml
+extensions:
+  sorting-hat:
+    remove: r
+    placeholder: "[{language} code hidden]"
+```
+
+This shows *[r code hidden]* in place of each R block. Without `placeholder`, removed code leaves nothing behind.
+
+## How do I change the placeholder's look?
+
+Set `placeholder-style` to the CSS you want:
+
+```yaml
+extensions:
+  sorting-hat:
+    remove: r
+    placeholder: "[{language} code hidden]"
+    placeholder-style: "color: #b45309; font-weight: bold;"
+```
+
+The default style is `color: #888; font-style: italic; padding: 0.5em; border-left: 3px solid #ddd; margin: 1em 0;`. The style applies to HTML output. Other formats show the placeholder as italic text.
+
+## Can I collapse filtered code instead of removing it?
+
+Yes, with `action: collapse`:
+
+```yaml
+extensions:
+  sorting-hat:
+    keep: python
+    action: collapse
+```
+
+Each filtered block or cell goes into a collapsed section, labeled with its language in capitals, such as "R code (click to expand)". Readers click the label to see the code and its output. The label's wording is fixed.
+
+`placeholder` has no effect with `action: collapse`, because nothing is removed.
+
+## Does collapsing work outside HTML?
+
+No. Collapsing needs HTML. In PDF, Typst, and Word output, a collapsed block shows its code in full, without the label. To leave filtered code out of those formats, give them `action: remove` with [options for each output format](#can-i-use-different-options-for-each-output-format).
+
+# Projects and Formats
+
+## Can I set the options once for a whole project?
+
+Yes. Put the filter and the options in `_quarto.yml`, and they apply to every page in the project:
+
+```yaml
+filters:
+  - sorting-hat
+extensions:
+  sorting-hat:
+    keep: python
+```
+
+If a page sets its own `extensions: sorting-hat:` options, they replace the project's options instead of adding to them, so repeat any option the page still needs.
+
+## Can I use different options for each output format?
+
+Yes. Put `extensions:` under each format:
+
+```yaml
+filters:
+  - sorting-hat
+format:
+  html:
+    extensions:
+      sorting-hat:
+        keep: python
+        action: collapse
+  docx:
+    extensions:
+      sorting-hat:
+        keep: python
+        placeholder: "[{language} code is in the online version]"
+```
+
+## How do I make a Python version and an R version from one source?
+
+Use [Quarto profiles](https://quarto.org/docs/projects/profiles.html) in a project with `filters: [sorting-hat]` in its `_quarto.yml`. Each profile is a `_quarto-<name>.yml` file next to `_quarto.yml`, and its settings are merged into the project's:
+
+```yaml
+# _quarto-python.yml
+project:
+  output-dir: _site-python
+extensions:
+  sorting-hat:
+    keep: python
+```
+
+```yaml
+# _quarto-r.yml
+project:
+  output-dir: _site-r
+extensions:
+  sorting-hat:
+    keep: r
+```
+
+Then render each profile:
+
+```bash
+quarto render --profile python
+quarto render --profile r
+```
+
+Giving each profile its own `output-dir` keeps the two versions from overwriting each other.
+
+# Troubleshooting
+
+## Nothing is filtered. What should I check?
+
+- The front matter lists `sorting-hat` under `filters`.
+- The options sit under `extensions: sorting-hat:` and include `keep` or `remove`.
+- The language names match your code blocks exactly, including case.
+- The extension is installed, in `_extensions/coatless-quarto/sorting-hat/`.
+
+If that all looks right, turn on `debug`.
+
+## How do I see what sorting-hat is doing?
+
+Set `debug: true`:
+
+```yaml
+extensions:
+  sorting-hat:
+    keep: python
+    debug: true
+```
+
+While rendering, sorting-hat then prints its settings and its decision for each code block to the console.
+
+## How can I get help?
+
+[Open an issue](https://github.com/coatless-quarto/sorting-hat/issues/new/choose) on GitHub with a small document that shows the problem and the console output from `debug: true`.
