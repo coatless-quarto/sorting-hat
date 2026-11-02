@@ -167,7 +167,14 @@ extensions:
     keep: python
 ```
 
-If a page sets its own `extensions: sorting-hat:` options, they replace the project's options instead of adding to them, so repeat any option the page still needs.
+A page can set its own `extensions: sorting-hat:` options too. Quarto combines them with the project's: anything the page doesn't set still comes from `_quarto.yml`, and a single value the page sets, such as `action: collapse` or `keep: r`, replaces the project's. Lists are joined instead, so with `keep: [python]` in `_quarto.yml`, a page with `keep: [r]` keeps both languages. To switch languages on one page, write `keep` as a single name, without brackets, in both places.
+
+To turn the options off for one page, so that it keeps every block:
+
+```yaml
+extensions:
+  sorting-hat: false
+```
 
 ## Can I use different options for each output format?
 
