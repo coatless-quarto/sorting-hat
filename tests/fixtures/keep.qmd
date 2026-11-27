@@ -1,0 +1,21 @@
+---
+title: "sorting-hat: keep python, which wins over remove"
+filters:
+  - sorting-hat
+extensions:
+  sorting-hat:
+    keep: python
+    remove: python
+---
+
+```python
+print("py-marker")
+```
+
+```r
+print("r-marker")
+```
+
+```bash
+echo "bash-marker"
+```

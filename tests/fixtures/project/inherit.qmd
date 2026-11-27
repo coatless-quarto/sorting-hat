@@ -1,0 +1,15 @@
+---
+title: "Takes the project's options"
+---
+
+```python
+print("py-marker")
+```
+
+```r
+print("r-marker")
+```
+
+```bash
+echo "bash-marker"
+```

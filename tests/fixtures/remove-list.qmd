@@ -1,0 +1,22 @@
+---
+title: "sorting-hat: remove as a list"
+filters:
+  - sorting-hat
+extensions:
+  sorting-hat:
+    remove:
+      - r
+      - bash
+---
+
+```python
+print("py-marker")
+```
+
+```r
+print("r-marker")
+```
+
+```bash
+echo "bash-marker"
+```

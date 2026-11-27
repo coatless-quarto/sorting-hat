@@ -1,0 +1,21 @@
+---
+title: "sorting-hat: debug"
+filters:
+  - sorting-hat
+extensions:
+  sorting-hat:
+    remove: r
+    debug: true
+---
+
+```python
+print("py-marker")
+```
+
+```r
+print("r-marker")
+```
+
+```bash
+echo "bash-marker"
+```

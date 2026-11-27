@@ -1,0 +1,22 @@
+---
+title: "sorting-hat: placeholder"
+filters:
+  - sorting-hat
+extensions:
+  sorting-hat:
+    remove: r
+    placeholder: "[{language} code hidden]"
+    placeholder-style: "color: teal;"
+---
+
+```python
+print("py-marker")
+```
+
+```r
+print("r-marker")
+```
+
+```bash
+echo "bash-marker"
+```

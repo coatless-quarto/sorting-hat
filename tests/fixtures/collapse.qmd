@@ -1,0 +1,21 @@
+---
+title: "sorting-hat: collapse"
+filters:
+  - sorting-hat
+extensions:
+  sorting-hat:
+    remove: r
+    action: collapse
+---
+
+```python
+print("py-marker")
+```
+
+```r
+print("r-marker")
+```
+
+```bash
+echo "bash-marker"
+```
