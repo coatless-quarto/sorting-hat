@@ -1,0 +1,32 @@
+---
+title: "sorting-hat: cell overrides"
+filters:
+  - sorting-hat
+extensions:
+  sorting-hat:
+    keep: python
+---
+
+::: {.cell sorting-hat="keep"}
+```{.r .cell-code}
+print("r-override-keep")
+```
+:::
+
+::: {.cell sorting-hat="REMOVE"}
+```{.python .cell-code}
+print("py-override-remove")
+```
+:::
+
+::: {.cell sorting-hat="collapse"}
+```{.python .cell-code}
+print("py-override-collapse")
+```
+:::
+
+::: {.cell}
+```{.r .cell-code}
+print("r-cell-filtered")
+```
+:::

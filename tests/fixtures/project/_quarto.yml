@@ -1,0 +1,9 @@
+project:
+  type: default
+
+filters:
+  - sorting-hat
+
+extensions:
+  sorting-hat:
+    keep: python

@@ -1,0 +1,17 @@
+---
+title: "Turns the project's options off"
+extensions:
+  sorting-hat: false
+---
+
+```python
+print("py-marker")
+```
+
+```r
+print("r-marker")
+```
+
+```bash
+echo "bash-marker"
+```

@@ -1,0 +1,22 @@
+---
+title: "sorting-hat: keep as a list"
+filters:
+  - sorting-hat
+extensions:
+  sorting-hat:
+    keep:
+      - python
+      - bash
+---
+
+```python
+print("py-marker")
+```
+
+```r
+print("r-marker")
+```
+
+```bash
+echo "bash-marker"
+```
